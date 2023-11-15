@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/veandco/go-sdl2/sdl"
 )
 
@@ -10,7 +12,11 @@ type Display struct {
 	Instructions chan func()
 }
 
-func (d *Display) InitDisplay() {
+var key *Key
+
+func (d *Display) InitDisplay(k *Key) {
+	key = k
+
 	if err := sdl.Init(sdl.INIT_EVERYTHING); err != nil {
 		panic(err)
 	}
@@ -34,8 +40,13 @@ func (d *Display) InitDisplay() {
 	running := true
 	for running {
 		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
-			switch event.(type) {
+			switch e := event.(type) {
+			case *sdl.KeyboardEvent:
+				key.KeyboardEvent = e.Keysym.Sym
+				key.SetMappedKey()
+				fmt.Println("pressed key: ", key.MappedKey)
 			case *sdl.QuitEvent:
+				fmt.Println("QUIT")
 				running = false
 			}
 		}

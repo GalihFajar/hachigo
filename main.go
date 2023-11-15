@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"time"
 )
@@ -47,12 +48,13 @@ var memory [4096]byte
 var stack Stack[uint16]
 var index uint16
 var display Display
+var k Key
 
 // ignore the memory clock atm
 func main() {
 	loadFileToMemory(&memory)
 	go chip()
-	display.InitDisplay()
+	display.InitDisplay(&k)
 }
 
 func chip() {
@@ -107,6 +109,65 @@ func chip() {
 		case 7:
 			secondNibble := ((instruction & (uint16(0x0F00))) >> 8)
 			V[secondNibble] += uint8((instruction & (uint16(0x00FF))))
+		case 8:
+			secondNibble := ((instruction & (uint16(0x0F00))) >> 8)
+			thirdNibble := ((instruction & (uint16(0x00F0))) >> 4)
+			VX := &V[secondNibble]
+			VY := &V[thirdNibble]
+
+			switch instruction & uint16(0x000F) {
+			case 0:
+				*VX = *VY
+			case 1:
+				*VX = *VX | *VY
+			case 2:
+				*VX = *VX & *VY
+			case 3:
+				*VX = *VX ^ *VY
+			case 4:
+				result := *VX + *VY
+
+				if result < *VX || result < *VY {
+					V[0xF] = 1
+				} else {
+					V[0xF] = 0
+				}
+			case 5:
+				*VX = *VX - *VY
+
+				if *VX > *VY {
+					V[0xF] = 1
+				} else {
+					V[0xF] = 0
+				}
+			case 6:
+				*VX = *VY
+				if (*VX & 0x01) == 1 {
+					V[0xF] = 1
+				} else {
+					V[0xF] = 0
+				}
+
+				*VX = *VX >> 1
+			case 7:
+				*VX = *VY - *VX
+
+				if *VY > *VX {
+					V[0xF] = 1
+				} else {
+					V[0xF] = 0
+				}
+			case 0xE:
+				*VX = *VY
+
+				if (*VX & 0x80) == 1 {
+					V[0xF] = 1
+				} else {
+					V[0xF] = 0
+				}
+
+				*VX = *VX << 1
+			}
 		case 9:
 			secondNibble := ((instruction & (uint16(0x0F00))) >> 8)
 			thirdNibble := ((instruction & (uint16(0x00F0))) >> 4)
@@ -116,6 +177,14 @@ func chip() {
 			}
 		case 0xA:
 			index = instruction & (uint16(0xFFFF) >> 4)
+		case 0xB:
+			twelveBitAddress := instruction & (uint16(0xFFFF) >> 4)
+			PC = twelveBitAddress + uint16(V[0])
+		case 0xC:
+			secondNibble := ((instruction & (uint16(0x0F00))) >> 8)
+			lastByte := byte(instruction & (0x00FF))
+			r := rand.New(rand.NewSource(time.Now().UnixNano()))
+			V[secondNibble] = byte(r.Intn(int(lastByte))) & (lastByte)
 		case 0xD:
 			secondNibble := ((instruction & (uint16(0x0F00))) >> 8)
 			thirdNibble := ((instruction & (uint16(0x00F0))) >> 4)
@@ -149,6 +218,20 @@ func chip() {
 				y++
 				N--
 			}
+		case 0xE:
+			lastByte := byte(instruction & (0x00FF))
+			secondNibble := ((instruction & (uint16(0x0F00))) >> 8)
+
+			switch lastByte {
+			case 0x9E:
+				if byte(secondNibble) == key.MappedKey {
+					PC += 2
+				}
+			case 0xA1:
+				if byte(secondNibble) != key.MappedKey {
+					PC += 2
+				}
+			}
 
 		default:
 			fmt.Printf("unsupported instruction: %X\n", firstNibble)
@@ -166,6 +249,7 @@ func initMemory(mem *[4096]byte) {
 
 func loadFileToMemory(mem *[4096]byte) {
 	pointer := PROGRAM_START_ADDRESS
+	// dat, err := os.ReadFile("test-roms/chip8-test-rom/test_opcode.ch8")
 	dat, err := os.ReadFile("test-roms/ibm-logo.ch8")
 
 	if err != nil {
