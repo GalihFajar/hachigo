@@ -42,15 +42,21 @@ func (d *Display) InitDisplay(k *Key) {
 		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
 			switch e := event.(type) {
 			case *sdl.KeyboardEvent:
-				key.KeyboardEvent = e.Keysym.Sym
-				key.SetMappedKey()
-				fmt.Println("pressed key: ", key.MappedKey)
+				if e.Type == uint32(sdl.KEYDOWN) {
+					key.KeyboardEvent = e.Keysym.Sym
+					key.SetMappedKey()
+					key.IsPressed = true
+
+				} else {
+					key.IsPressed = false
+				}
+
 			case *sdl.QuitEvent:
 				fmt.Println("QUIT")
 				running = false
+
 			}
 		}
-
 	}
 }
 

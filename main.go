@@ -33,6 +33,8 @@ var font [80]byte = [80]byte{
 	0xF0, 0x80, 0xF0, 0x80, 0x80, // F
 }
 
+var fontLocationAddress [16]byte
+
 var V [16]byte = [16]byte{
 	0x00, 0x00,
 	0x00, 0x00,
@@ -49,6 +51,8 @@ var stack Stack[uint16]
 var index uint16
 var display Display
 var k Key
+var timer Timer = Timer{Time: 0xFF}
+var soundTimer = Timer{Time: 0xFF, TimerCallback: []func(){func() { fmt.Println("beep") }}}
 
 // ignore the memory clock atm
 func main() {
@@ -60,6 +64,7 @@ func main() {
 func chip() {
 	time.Sleep(2 * time.Second)
 	initMemory(&memory)
+	initFontLocationAddress()
 	for {
 
 		// fetch
@@ -88,20 +93,20 @@ func chip() {
 			secondNibble := ((instruction & (uint16(0x0F00))) >> 8)
 
 			if V[secondNibble] == byte(instruction&uint16(0x00FF)) {
-				PC += 1
+				PC += 2
 			}
 		case 4:
 			secondNibble := ((instruction & (uint16(0x0F00))) >> 8)
 
 			if V[secondNibble] != byte(instruction&uint16(0x00FF)) {
-				PC += 1
+				PC += 2
 			}
 		case 5:
 			secondNibble := ((instruction & (uint16(0x0F00))) >> 8)
 			thirdNibble := ((instruction & (uint16(0x00F0))) >> 4)
 
 			if V[secondNibble] == V[thirdNibble] {
-				PC += 1
+				PC += 2
 			}
 		case 6:
 			secondNibble := ((instruction & (uint16(0x0F00))) >> 8)
@@ -126,7 +131,7 @@ func chip() {
 				*VX = *VX ^ *VY
 			case 4:
 				result := *VX + *VY
-
+				*VX = result
 				if result < *VX || result < *VY {
 					V[0xF] = 1
 				} else {
@@ -167,19 +172,27 @@ func chip() {
 				}
 
 				*VX = *VX << 1
+			default:
+				fmt.Printf("unsupported instruction: %X\n", instruction)
 			}
 		case 9:
 			secondNibble := ((instruction & (uint16(0x0F00))) >> 8)
 			thirdNibble := ((instruction & (uint16(0x00F0))) >> 4)
 
 			if V[secondNibble] != V[thirdNibble] {
-				PC += 1
+				PC += 2
 			}
 		case 0xA:
 			index = instruction & (uint16(0xFFFF) >> 4)
 		case 0xB:
-			twelveBitAddress := instruction & (uint16(0xFFFF) >> 4)
+			// first logic
+			twelveBitAddress := instruction & 0x0FFF
 			PC = twelveBitAddress + uint16(V[0])
+
+			// second logic, might need to adjust on other system
+			// second := (instruction & uint16(0x0F00) >> 8)
+			// eightBitAddress := instruction & (uint16(0x00FF))
+			// PC = eightBitAddress + uint16(V[second])
 		case 0xC:
 			secondNibble := ((instruction & (uint16(0x0F00))) >> 8)
 			lastByte := byte(instruction & (0x00FF))
@@ -224,17 +237,82 @@ func chip() {
 
 			switch lastByte {
 			case 0x9E:
-				if byte(secondNibble) == key.MappedKey {
+				if (key.IsPressed) && byte(secondNibble) == key.MappedKey {
 					PC += 2
 				}
 			case 0xA1:
 				if byte(secondNibble) != key.MappedKey {
 					PC += 2
 				}
+			default:
+				fmt.Printf("unsupported instruction: %X\n", instruction)
+			}
+		case 0xF:
+			secondNibble := ((instruction & (uint16(0x0F00))) >> 8)
+			lastByte := byte(instruction & (0x00FF))
+
+			switch lastByte {
+			case 0x07:
+				V[secondNibble] = timer.Time
+			case 0x15:
+				timer.Time = V[secondNibble]
+			case 0x18:
+				soundTimer.Time = V[secondNibble]
+			case 0x1E:
+				index += uint16(V[secondNibble])
+
+				if index > 0x0FFF {
+					V[0xF] = 1
+				}
+			case 0x0A:
+				cont := false
+				for !key.IsPressed {
+					V[secondNibble] = key.MappedKey
+					cont = true
+				}
+
+				if !cont {
+					PC -= 2
+				}
+			case 0x29:
+				index = uint16(fontLocationAddress[(V[secondNibble])])
+			case 0x33:
+				ptr := index
+				parseAndStore := func(n byte) {
+
+					for i := 100; i > 0; i /= 10 {
+						fmt.Println("ptr:", ptr)
+						if n/byte(i) == 0 {
+							memory[ptr] = 0
+							ptr++
+							continue
+						}
+
+						memory[ptr] = (n / byte(i))
+						n = n % byte(i)
+						ptr++
+					}
+				}
+
+				parseAndStore(byte(V[secondNibble]))
+			case 0x55:
+				ptr := index
+				for i := byte(0); i <= byte(secondNibble); i++ {
+					memory[ptr] = V[i]
+					ptr++
+				}
+			case 0x65:
+				ptr := index
+				for i := byte(0); i <= byte(secondNibble); i++ {
+					V[i] = memory[ptr]
+					ptr++
+				}
+			default:
+				fmt.Printf("unsupported instruction: %X\n", instruction)
 			}
 
 		default:
-			fmt.Printf("unsupported instruction: %X\n", firstNibble)
+			fmt.Printf("unsupported instruction: %X\n", instruction)
 		}
 	}
 }
@@ -247,10 +325,16 @@ func initMemory(mem *[4096]byte) {
 	}
 }
 
+func initFontLocationAddress() {
+	for i := 0; i <= 0xF; i += 5 {
+		fontLocationAddress[i] = FONT_START_ADDRESS + byte(i)
+	}
+}
+
 func loadFileToMemory(mem *[4096]byte) {
 	pointer := PROGRAM_START_ADDRESS
-	// dat, err := os.ReadFile("test-roms/chip8-test-rom/test_opcode.ch8")
-	dat, err := os.ReadFile("test-roms/ibm-logo.ch8")
+	dat, err := os.ReadFile("test-roms/chip8-test-rom/test_opcode.ch8")
+	// dat, err := os.ReadFile("test-roms/ibm-logo.ch8")
 
 	if err != nil {
 		panic(err)
@@ -260,4 +344,6 @@ func loadFileToMemory(mem *[4096]byte) {
 		mem[pointer] = b
 		pointer++
 	}
+
+	fmt.Printf("mem on 46B: %04X\n", mem[0x46B])
 }

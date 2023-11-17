@@ -5,6 +5,7 @@ import "github.com/veandco/go-sdl2/sdl"
 type Key struct {
 	KeyboardEvent sdl.Keycode
 	MappedKey     byte
+	IsPressed     bool
 }
 
 func (k *Key) SetMappedKey() {
