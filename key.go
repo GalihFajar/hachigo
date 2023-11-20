@@ -1,15 +1,28 @@
 package main
 
-import "github.com/veandco/go-sdl2/sdl"
+import (
+	"sync"
+
+	"github.com/veandco/go-sdl2/sdl"
+)
 
 type Key struct {
+	mu            sync.Mutex
 	KeyboardEvent sdl.Keycode
 	MappedKey     byte
 	IsPressed     bool
 }
 
 func (k *Key) SetMappedKey() {
+	k.mu.Lock()
+	defer k.mu.Unlock()
 	k.MappedKey = MapKey(byte(k.KeyboardEvent))
+}
+
+func (k *Key) GetMappedKey() byte {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	return k.MappedKey
 }
 
 /*
@@ -37,40 +50,40 @@ v -> F
 func MapKey(c byte) byte {
 	switch c {
 	case byte('1'):
-		return byte('1')
+		return 0x1
 	case byte('2'):
-		return byte('2')
+		return 0x2
 	case byte('3'):
-		return byte('3')
+		return 0x3
 	case byte('4'):
-		return byte('C')
+		return 0xC
 
 	case byte('q'):
-		return byte('4')
+		return 0x4
 	case byte('w'):
-		return byte('5')
+		return 0x5
 	case byte('e'):
-		return byte('6')
+		return 0x6
 	case byte('r'):
-		return byte('D')
+		return 0xD
 
 	case byte('a'):
-		return byte('7')
+		return 0x7
 	case byte('s'):
-		return byte('8')
+		return 0x8
 	case byte('d'):
-		return byte('9')
+		return 0x9
 	case byte('f'):
-		return byte('E')
+		return 0xE
 
 	case byte('z'):
-		return byte('A')
+		return 0xA
 	case byte('x'):
-		return byte('0')
+		return 0x0
 	case byte('c'):
-		return byte('B')
+		return 0xB
 	case byte('v'):
-		return byte('F')
+		return 0xF
 	default:
 		return c
 	}

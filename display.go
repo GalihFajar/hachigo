@@ -7,15 +7,31 @@ import (
 )
 
 type Display struct {
-	Window       *sdl.Window
-	Surface      *sdl.Surface
-	Instructions chan func()
+	Window        *sdl.Window
+	Surface       *sdl.Surface
+	Instructions  chan Instruction
+	PixelStatuses [][]bool
+}
+
+type Pixel struct {
+	X    int32
+	Y    int32
+	IsOn bool
+}
+
+type Instruction struct {
+	Fn   func(args ...any)
+	args []any
 }
 
 var key *Key
+var onColor sdl.Color = sdl.Color{R: 255, G: 255, B: 255, A: 255}
+var offColor sdl.Color = sdl.Color{R: 0, G: 0, B: 0, A: 0}
 
 func (d *Display) InitDisplay(k *Key) {
 	key = k
+	d.Instructions = make(chan Instruction, 1000)
+	go d.PerformInstructions()
 
 	if err := sdl.Init(sdl.INIT_EVERYTHING); err != nil {
 		panic(err)
@@ -62,20 +78,18 @@ func (d *Display) InitDisplay(k *Key) {
 
 // Input of x and y should be the original pixel coordinate, and will be scaled by a factor of 10
 func (d *Display) TurnOnPixel(x int32, y int32) {
-	rect := sdl.Rect{x * 10, y * 10, 10, 10}
-	color := sdl.Color{255, 255, 255, 255}
-	pixel := sdl.MapRGBA(d.Surface.Format, color.R, color.G, color.B, color.A)
+	rect := sdl.Rect{X: x * 10, Y: y * 10, W: 10, H: 10}
+	pixel := sdl.MapRGBA(d.Surface.Format, onColor.R, onColor.G, onColor.B, onColor.A)
 	d.Surface.FillRect(&rect, pixel)
-	d.Window.UpdateSurface()
+	// d.Window.UpdateSurface()
 }
 
 // Input of x and y should be the original pixel coordinate, and will be scaled by a factor of 10
 func (d *Display) TurnOffPixel(x int32, y int32) {
-	rect := sdl.Rect{x * 10, y * 10, 10, 10}
-	color := sdl.Color{0, 0, 0, 0}
-	pixel := sdl.MapRGBA(d.Surface.Format, color.R, color.G, color.B, color.A)
+	rect := sdl.Rect{X: x * 10, Y: y * 10, W: 10, H: 10}
+	pixel := sdl.MapRGBA(d.Surface.Format, offColor.R, offColor.G, offColor.B, offColor.A)
 	d.Surface.FillRect(&rect, pixel)
-	d.Window.UpdateSurface()
+	// d.Window.UpdateSurface()
 }
 
 func (d *Display) IsPixelOn(x int32, y int32) bool {
@@ -105,5 +119,15 @@ func (d *Display) Run() {
 	running := true
 	for running {
 		sdl.PollEvent()
+	}
+}
+
+func (d *Display) SendInstruction(i Instruction) {
+	d.Instructions <- i
+}
+
+func (d *Display) PerformInstructions() {
+	for i := range d.Instructions {
+		i.Fn(i.args...)
 	}
 }

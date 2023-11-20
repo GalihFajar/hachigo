@@ -51,8 +51,8 @@ var stack Stack[uint16]
 var index uint16
 var display Display
 var k Key
-var timer Timer = Timer{Time: 0xFF}
-var soundTimer = Timer{Time: 0xFF, TimerCallback: []func(){func() { fmt.Println("beep") }}}
+var timer Timer
+var soundTimer Timer
 
 // ignore the memory clock atm
 func main() {
@@ -62,9 +62,12 @@ func main() {
 }
 
 func chip() {
-	time.Sleep(2 * time.Second)
+	time.Sleep(3 * time.Second)
 	initMemory(&memory)
 	initFontLocationAddress()
+	initTimers()
+	timer.Decrement()
+	soundTimer.Decrement()
 	for {
 
 		// fetch
@@ -76,9 +79,9 @@ func chip() {
 		switch firstNibble {
 		case 0:
 			switch twelveBitAddress := instruction & (uint16(0xFFFF) >> 4); twelveBitAddress {
-			case uint16(0x00E0):
+			case 0x0E0:
 				display.ClearScreen()
-			case uint16(0x00EE):
+			case 0x00EE:
 				address, _ := stack.Pop()
 				PC = address.(uint16)
 			default:
@@ -88,7 +91,7 @@ func chip() {
 			PC = instruction & (uint16(0xFFFF) >> 4)
 		case 2:
 			stack.Push(PC)
-			PC = instruction & (uint16(0xFFFF) >> 4)
+			PC = instruction & 0x0FFF
 		case 3:
 			secondNibble := ((instruction & (uint16(0x0F00))) >> 8)
 
@@ -138,22 +141,20 @@ func chip() {
 					V[0xF] = 0
 				}
 			case 5:
+				minuend, subtrahend := *VX, *VY
 				*VX = *VX - *VY
 
-				if *VX > *VY {
+				if minuend >= subtrahend {
 					V[0xF] = 1
 				} else {
 					V[0xF] = 0
 				}
 			case 6:
-				*VX = *VY
-				if (*VX & 0x01) == 1 {
-					V[0xF] = 1
-				} else {
-					V[0xF] = 0
-				}
+				// *VX = *VY
 
-				*VX = *VX >> 1
+				flag := *VX & 0x01
+				*VX >>= 1
+				V[0xF] = flag
 			case 7:
 				*VX = *VY - *VX
 
@@ -163,15 +164,10 @@ func chip() {
 					V[0xF] = 0
 				}
 			case 0xE:
-				*VX = *VY
-
-				if (*VX & 0x80) == 1 {
-					V[0xF] = 1
-				} else {
-					V[0xF] = 0
-				}
-
-				*VX = *VX << 1
+				// *VX = *VY
+				flag := (*VX >> 7) & 0x01
+				*VX <<= 1
+				V[0xF] = flag
 			default:
 				fmt.Printf("unsupported instruction: %X\n", instruction)
 			}
@@ -190,7 +186,7 @@ func chip() {
 			PC = twelveBitAddress + uint16(V[0])
 
 			// second logic, might need to adjust on other system
-			// second := (instruction & uint16(0x0F00) >> 8)
+			// second := ((instruction & uint16(0x0F00)) >> 8)
 			// eightBitAddress := instruction & (uint16(0x00FF))
 			// PC = eightBitAddress + uint16(V[second])
 		case 0xC:
@@ -217,11 +213,13 @@ func chip() {
 
 					if bit == 1 {
 						if display.IsPixelOn(x, y) {
-							display.TurnOffPixel(x, y)
+							// display.Instructions <- Instruction{Fn: func(args ...any) { display.TurnOffPixel(args[0].(int32), args[1].(int32)) }, args: []any{x, y}}
+							display.SendInstruction(Instruction{Fn: func(args ...any) { display.TurnOffPixel(args[0].(int32), args[1].(int32)) }, args: []any{x, y}})
 
 							V[0xF] = 1
 						} else {
-							display.TurnOnPixel(x, y)
+							// display.Instructions <- Instruction{Fn: func(args ...any) { display.TurnOnPixel(args[0].(int32), args[1].(int32)) }, args: []any{x, y}}
+							display.SendInstruction(Instruction{Fn: func(args ...any) { display.TurnOnPixel(args[0].(int32), args[1].(int32)) }, args: []any{x, y}})
 						}
 					}
 					x++
@@ -231,6 +229,11 @@ func chip() {
 				y++
 				N--
 			}
+
+			for len(display.Instructions) > 0 {
+			}
+			// display.SendInstruction(Instruction{Fn: func(args ...any) { display.Window.UpdateSurface() }, args: []any{}})
+			display.Window.UpdateSurface()
 		case 0xE:
 			lastByte := byte(instruction & (0x00FF))
 			secondNibble := ((instruction & (uint16(0x0F00))) >> 8)
@@ -253,11 +256,11 @@ func chip() {
 
 			switch lastByte {
 			case 0x07:
-				V[secondNibble] = timer.Time
+				V[secondNibble] = timer.GetTime()
 			case 0x15:
-				timer.Time = V[secondNibble]
+				timer.SetTime(V[secondNibble])
 			case 0x18:
-				soundTimer.Time = V[secondNibble]
+				soundTimer.SetTime(V[secondNibble])
 			case 0x1E:
 				index += uint16(V[secondNibble])
 
@@ -265,13 +268,9 @@ func chip() {
 					V[0xF] = 1
 				}
 			case 0x0A:
-				cont := false
-				for !key.IsPressed {
-					V[secondNibble] = key.MappedKey
-					cont = true
-				}
-
-				if !cont {
+				if key.IsPressed {
+					V[secondNibble] = key.GetMappedKey()
+				} else {
 					PC -= 2
 				}
 			case 0x29:
@@ -281,7 +280,6 @@ func chip() {
 				parseAndStore := func(n byte) {
 
 					for i := 100; i > 0; i /= 10 {
-						fmt.Println("ptr:", ptr)
 						if n/byte(i) == 0 {
 							memory[ptr] = 0
 							ptr++
@@ -314,6 +312,7 @@ func chip() {
 		default:
 			fmt.Printf("unsupported instruction: %X\n", instruction)
 		}
+		time.Sleep(time.Second / 2500)
 	}
 }
 
@@ -326,14 +325,16 @@ func initMemory(mem *[4096]byte) {
 }
 
 func initFontLocationAddress() {
-	for i := 0; i <= 0xF; i += 5 {
-		fontLocationAddress[i] = FONT_START_ADDRESS + byte(i)
+	inc := 0
+	for i := 0; i <= 0xF; i++ {
+		fontLocationAddress[i] = FONT_START_ADDRESS + byte(inc)
+		inc += 5
 	}
 }
 
 func loadFileToMemory(mem *[4096]byte) {
 	pointer := PROGRAM_START_ADDRESS
-	dat, err := os.ReadFile("test-roms/chip8-test-rom/test_opcode.ch8")
+	dat, err := os.ReadFile("test-roms/chip8-test-rom/4-flags.ch8")
 	// dat, err := os.ReadFile("test-roms/ibm-logo.ch8")
 
 	if err != nil {
@@ -344,6 +345,23 @@ func loadFileToMemory(mem *[4096]byte) {
 		mem[pointer] = b
 		pointer++
 	}
+}
 
-	fmt.Printf("mem on 46B: %04X\n", mem[0x46B])
+func initTimers() {
+	timer = Timer{Time: 0xFF}
+	soundTimer = Timer{Time: 0xFF, TimerCallback: []func(){func() { fmt.Printf("") }}}
+}
+
+func printProgam() {
+	count := 0
+	dat, _ := os.ReadFile("test-roms/chip8-test-rom/delay_timer_test.ch8")
+	for i, b := range dat {
+		fmt.Printf("%02X", b)
+		count++
+
+		if count == 2 {
+			count = 0
+			fmt.Printf(" memory address: %04X\n", i+(0x200-1))
+		}
+	}
 }
