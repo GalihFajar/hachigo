@@ -58,11 +58,12 @@ var soundTimer Timer
 func main() {
 	loadFileToMemory(&memory)
 	go chip()
+	k.SetIsPressed(false)
 	display.InitDisplay(&k)
 }
 
 func chip() {
-	time.Sleep(3 * time.Second)
+	time.Sleep(5 * time.Second)
 	initMemory(&memory)
 	initFontLocationAddress()
 	initTimers()
@@ -80,7 +81,14 @@ func chip() {
 		case 0:
 			switch twelveBitAddress := instruction & (uint16(0xFFFF) >> 4); twelveBitAddress {
 			case 0x0E0:
-				display.ClearScreen()
+				display.SendInstruction(Instruction{
+					Fn: func(args ...any) {
+						display.ClearScreen()
+					},
+					args: []any{},
+				})
+				for len(display.Instructions) > 0 {
+				}
 			case 0x00EE:
 				address, _ := stack.Pop()
 				PC = address.(uint16)
@@ -202,6 +210,7 @@ func chip() {
 			y := int32(V[thirdNibble] & 31)
 
 			V[0xF] = 0x0
+			VF := &V[0xF]
 
 			pointer := index
 			for N > 0 {
@@ -213,13 +222,15 @@ func chip() {
 
 					if bit == 1 {
 						if display.IsPixelOn(x, y) {
-							// display.Instructions <- Instruction{Fn: func(args ...any) { display.TurnOffPixel(args[0].(int32), args[1].(int32)) }, args: []any{x, y}}
-							display.SendInstruction(Instruction{Fn: func(args ...any) { display.TurnOffPixel(args[0].(int32), args[1].(int32)) }, args: []any{x, y}})
-
-							V[0xF] = 1
+							display.SendInstruction(Instruction{Fn: func(args ...any) {
+								display.TurnOffPixel(args[0].(int32), args[1].(int32))
+								*VF = 1
+							}, args: []any{x, y}})
 						} else {
-							// display.Instructions <- Instruction{Fn: func(args ...any) { display.TurnOnPixel(args[0].(int32), args[1].(int32)) }, args: []any{x, y}}
-							display.SendInstruction(Instruction{Fn: func(args ...any) { display.TurnOnPixel(args[0].(int32), args[1].(int32)) }, args: []any{x, y}})
+							display.SendInstruction(Instruction{Fn: func(args ...any) {
+								display.TurnOnPixel(args[0].(int32), args[1].(int32))
+							}, args: []any{x, y}})
+
 						}
 					}
 					x++
@@ -229,22 +240,22 @@ func chip() {
 				y++
 				N--
 			}
-
+			display.SendInstruction(Instruction{Fn: func(args ...any) {
+				display.Window.UpdateSurface()
+			}, args: []any{}})
 			for len(display.Instructions) > 0 {
 			}
-			// display.SendInstruction(Instruction{Fn: func(args ...any) { display.Window.UpdateSurface() }, args: []any{}})
-			display.Window.UpdateSurface()
 		case 0xE:
 			lastByte := byte(instruction & (0x00FF))
 			secondNibble := ((instruction & (uint16(0x0F00))) >> 8)
 
 			switch lastByte {
 			case 0x9E:
-				if (key.IsPressed) && byte(secondNibble) == key.MappedKey {
+				if (key.GetIsPressed()) && byte(V[secondNibble]) == key.GetMappedKey() {
 					PC += 2
 				}
 			case 0xA1:
-				if byte(secondNibble) != key.MappedKey {
+				if byte(V[secondNibble]) != key.MappedKey {
 					PC += 2
 				}
 			default:
@@ -268,7 +279,7 @@ func chip() {
 					V[0xF] = 1
 				}
 			case 0x0A:
-				if key.IsPressed {
+				if key.GetIsPressed() {
 					V[secondNibble] = key.GetMappedKey()
 				} else {
 					PC -= 2
@@ -334,7 +345,7 @@ func initFontLocationAddress() {
 
 func loadFileToMemory(mem *[4096]byte) {
 	pointer := PROGRAM_START_ADDRESS
-	dat, err := os.ReadFile("test-roms/chip8-test-rom/4-flags.ch8")
+	dat, err := os.ReadFile("test-roms/chip8-test-rom/6-keypad.ch8")
 	// dat, err := os.ReadFile("test-roms/ibm-logo.ch8")
 
 	if err != nil {
@@ -349,7 +360,7 @@ func loadFileToMemory(mem *[4096]byte) {
 
 func initTimers() {
 	timer = Timer{Time: 0xFF}
-	soundTimer = Timer{Time: 0xFF, TimerCallback: []func(){func() { fmt.Printf("") }}}
+	soundTimer = Timer{Time: 0xFF, TimerCallback: []func(){func() { fmt.Printf("beep\n") }}}
 }
 
 func printProgam() {

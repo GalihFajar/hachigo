@@ -13,6 +13,24 @@ type Key struct {
 	IsPressed     bool
 }
 
+func (k *Key) SetKeyboardEvent(e sdl.Keycode) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.KeyboardEvent = e
+}
+
+func (k *Key) SetIsPressed(b bool) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.IsPressed = b
+}
+
+func (k *Key) GetIsPressed() bool {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	return k.IsPressed
+}
+
 func (k *Key) SetMappedKey() {
 	k.mu.Lock()
 	defer k.mu.Unlock()
@@ -23,6 +41,12 @@ func (k *Key) GetMappedKey() byte {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	return k.MappedKey
+}
+
+func (k *Key) ClearMappedKey() {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.MappedKey = 0xFF
 }
 
 /*
