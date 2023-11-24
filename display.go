@@ -2,13 +2,11 @@ package main
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/veandco/go-sdl2/sdl"
 )
 
 type Display struct {
-	mu            sync.Mutex
 	Window        *sdl.Window
 	Surface       *sdl.Surface
 	Instructions  chan Instruction
@@ -26,12 +24,13 @@ type Instruction struct {
 	args []any
 }
 
-var key *Key
+var globalKey *Key
+var keys map[byte]*Key
 var onColor sdl.Color = sdl.Color{R: 255, G: 255, B: 255, A: 255}
 var offColor sdl.Color = sdl.Color{R: 0, G: 0, B: 0, A: 0}
 
-func (d *Display) InitDisplay(k *Key) {
-	key = k
+func (d *Display) InitDisplay() {
+	keys = make(map[byte]*Key)
 	d.Instructions = make(chan Instruction, 1000)
 	d.InitPixelStatuses()
 	go d.PerformInstructions()
@@ -61,13 +60,24 @@ func (d *Display) InitDisplay(k *Key) {
 		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
 			switch e := event.(type) {
 			case *sdl.KeyboardEvent:
+				// Practical behavior: sdl can detect which key is up and down independently
 				if e.Type == uint32(sdl.KEYDOWN) {
-					key.SetKeyboardEvent(e.Keysym.Sym)
-					key.SetMappedKey()
-					key.SetIsPressed(true)
+					ck := keys[MapKey(byte(e.Keysym.Sym))]
+
+					if keys[MapKey(byte(e.Keysym.Sym))] == nil {
+						ck = &Key{}
+						keys[MapKey(byte(e.Keysym.Sym))] = ck
+					}
+
+					ck.SetKeyboardEvent(e.Keysym.Sym)
+					ck.SetMappedKey()
+					ck.SetIsPressed(true)
+					globalKey = ck
 				} else {
-					key.SetIsPressed(false)
-					key.ClearMappedKey()
+					ck := keys[MapKey(byte(e.Keysym.Sym))]
+					ck.ClearMappedKey()
+					ck.SetIsPressed(false)
+					globalKey = ck
 				}
 
 			case *sdl.QuitEvent:

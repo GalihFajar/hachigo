@@ -59,7 +59,7 @@ func main() {
 	loadFileToMemory(&memory)
 	go chip()
 	k.SetIsPressed(false)
-	display.InitDisplay(&k)
+	display.InitDisplay()
 }
 
 func chip() {
@@ -251,11 +251,13 @@ func chip() {
 
 			switch lastByte {
 			case 0x9E:
-				if (key.GetIsPressed()) && byte(V[secondNibble]) == key.GetMappedKey() {
+				ck := keys[V[secondNibble]]
+				if ck != nil && ck.GetIsPressed() {
 					PC += 2
 				}
 			case 0xA1:
-				if byte(V[secondNibble]) != key.MappedKey {
+				ck := keys[V[secondNibble]]
+				if ck == nil || (ck != nil && !ck.GetIsPressed()) {
 					PC += 2
 				}
 			default:
@@ -279,8 +281,8 @@ func chip() {
 					V[0xF] = 1
 				}
 			case 0x0A:
-				if key.GetIsPressed() {
-					V[secondNibble] = key.GetMappedKey()
+				if globalKey.GetIsPressed() {
+					V[secondNibble] = globalKey.GetMappedKey()
 				} else {
 					PC -= 2
 				}
@@ -346,6 +348,8 @@ func initFontLocationAddress() {
 func loadFileToMemory(mem *[4096]byte) {
 	pointer := PROGRAM_START_ADDRESS
 	dat, err := os.ReadFile("test-roms/chip8-test-rom/6-keypad.ch8")
+	// dat, err := os.ReadFile("test-roms/chip8-test-rom/br8kout.ch8")
+	// dat, err := os.ReadFile("test-roms/chip8-test-rom/chipquarium.ch8")
 	// dat, err := os.ReadFile("test-roms/ibm-logo.ch8")
 
 	if err != nil {
@@ -360,7 +364,7 @@ func loadFileToMemory(mem *[4096]byte) {
 
 func initTimers() {
 	timer = Timer{Time: 0xFF}
-	soundTimer = Timer{Time: 0xFF, TimerCallback: []func(){func() { fmt.Printf("beep\n") }}}
+	soundTimer = Timer{Time: 0xFF, TimerCallback: []func(){func() { fmt.Printf("") }}}
 }
 
 func printProgam() {
