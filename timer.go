@@ -6,9 +6,10 @@ import (
 )
 
 type Timer struct {
-	mu            sync.Mutex
-	Time          byte
-	TimerCallback []func()
+	mu                sync.Mutex
+	Time              byte
+	TimerCallback     []func()
+	TimerZeroCallback []func()
 }
 
 func (t *Timer) GetTime() byte {
@@ -34,12 +35,19 @@ func (t *Timer) Decrement() {
 			}
 
 			t.Time -= 1
+		} else {
+			for _, c := range t.TimerZeroCallback {
+				c()
+			}
 		}
 	}
 	ticker := time.NewTicker(1 * (time.Second / 50))
 
 	go func() {
 		for range ticker.C {
+			if destroy {
+				ticker.Stop()
+			}
 			f()
 		}
 	}()
