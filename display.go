@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/veandco/go-sdl2/mix"
 	"github.com/veandco/go-sdl2/sdl"
 )
 
@@ -82,8 +83,10 @@ func (d *Display) InitDisplay() {
 
 			case *sdl.QuitEvent:
 				fmt.Println("QUIT")
+				destroy = true
+				mix.CloseAudio()
+				display.Window.Destroy()
 				running = false
-
 			}
 		}
 	}

@@ -50,15 +50,19 @@ var memory [4096]byte
 var stack Stack[uint16]
 var index uint16
 var display Display
+var sound Sound
 var k Key
+
 var timer Timer
 var soundTimer Timer
+var destroy bool = false
 
 // ignore the memory clock atm
 func main() {
 	loadFileToMemory(&memory)
 	go chip()
 	k.SetIsPressed(false)
+	sound.InitSound()
 	display.InitDisplay()
 }
 
@@ -347,8 +351,9 @@ func initFontLocationAddress() {
 
 func loadFileToMemory(mem *[4096]byte) {
 	pointer := PROGRAM_START_ADDRESS
-	dat, err := os.ReadFile("test-roms/chip8-test-rom/6-keypad.ch8")
+	// dat, err := os.ReadFile("test-roms/chip8-test-rom/6-keypad.ch8")
 	// dat, err := os.ReadFile("test-roms/chip8-test-rom/br8kout.ch8")
+	dat, err := os.ReadFile("test-roms/chip8-test-rom/7-beep.ch8")
 	// dat, err := os.ReadFile("test-roms/chip8-test-rom/chipquarium.ch8")
 	// dat, err := os.ReadFile("test-roms/ibm-logo.ch8")
 
@@ -363,8 +368,8 @@ func loadFileToMemory(mem *[4096]byte) {
 }
 
 func initTimers() {
-	timer = Timer{Time: 0xFF}
-	soundTimer = Timer{Time: 0xFF, TimerCallback: []func(){func() { fmt.Printf("") }}}
+	timer = Timer{Time: 0x0}
+	soundTimer = Timer{Time: 0x0, TimerCallback: []func(){sound.Play}, TimerZeroCallback: []func(){sound.Stop}}
 }
 
 func printProgam() {
