@@ -286,6 +286,8 @@ func chip() {
 				}
 			case 0x0A:
 				if globalKey.GetIsPressed() {
+					for globalKey.GetIsPressed() {
+					}
 					V[secondNibble] = globalKey.GetMappedKey()
 				} else {
 					PC -= 2
@@ -351,9 +353,9 @@ func initFontLocationAddress() {
 
 func loadFileToMemory(mem *[4096]byte) {
 	pointer := PROGRAM_START_ADDRESS
-	// dat, err := os.ReadFile("test-roms/chip8-test-rom/6-keypad.ch8")
+	dat, err := os.ReadFile("test-roms/chip8-test-rom/6-keypad.ch8")
 	// dat, err := os.ReadFile("test-roms/chip8-test-rom/br8kout.ch8")
-	dat, err := os.ReadFile("test-roms/chip8-test-rom/7-beep.ch8")
+	// dat, err := os.ReadFile("test-roms/chip8-test-rom/7-beep.ch8")
 	// dat, err := os.ReadFile("test-roms/chip8-test-rom/chipquarium.ch8")
 	// dat, err := os.ReadFile("test-roms/ibm-logo.ch8")
 

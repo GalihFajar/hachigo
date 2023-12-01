@@ -75,10 +75,10 @@ func (d *Display) InitDisplay() {
 					ck.SetIsPressed(true)
 					globalKey = ck
 				} else {
+					globalKey = &Key{MappedKey: MapKey(byte(e.Keysym.Sym)), IsPressed: false}
 					ck := keys[MapKey(byte(e.Keysym.Sym))]
 					ck.ClearMappedKey()
 					ck.SetIsPressed(false)
-					globalKey = ck
 				}
 
 			case *sdl.QuitEvent:
