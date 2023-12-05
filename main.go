@@ -69,12 +69,22 @@ var eightxy6Flag flagStruct = flagStruct{name: "8xy6"}
 var eightxyeFlag flagStruct = flagStruct{name: "8xye"}
 var fx55Flag flagStruct = flagStruct{name: "fx55"}
 var fx65Flag flagStruct = flagStruct{name: "fx65"}
+var fileFlag *string
 
 // ignore the memory clock atm
 func main() {
+	flags()
+	loadFileToMemory(&memory, *fileFlag)
+	go chip()
+	k.SetIsPressed(false)
+	sound.InitSound()
+	display.InitDisplay()
+}
+
+func flags() {
 	var overrideFlags []*flagStruct
 	flagSet := make(map[string]bool)
-	fileFlag := flag.String("f", "", "filepath of chip8 program (.ch8 file)")
+	fileFlag = flag.String("f", "", "filepath of chip8 program (.ch8 file)")
 	isOriginal.value = flag.Bool(isOriginal.name, false, "set to original cosmacvip behavior (using original behavior if specified)")
 	bnnnFlag.value = flag.Bool(bnnnFlag.name, false, "override bnnn instruction (using original behavior if specified)")
 	eightxy6Flag.value = flag.Bool(eightxy6Flag.name, false, "override 8xy6 instruction (using original behavior if specified)")
@@ -106,12 +116,6 @@ func main() {
 			f.value = isOriginal.value
 		}
 	}
-
-	loadFileToMemory(&memory, *fileFlag)
-	go chip()
-	k.SetIsPressed(false)
-	sound.InitSound()
-	display.InitDisplay()
 }
 
 func chip() {
