@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"math/rand"
 	"os"
@@ -57,9 +58,56 @@ var timer Timer
 var soundTimer Timer
 var destroy bool = false
 
+type flagStruct struct {
+	name  string
+	value any
+}
+
+var isOriginal flagStruct = flagStruct{name: "o"}
+var bnnnFlag flagStruct = flagStruct{name: "bnnn"}
+var eightxy6Flag flagStruct = flagStruct{name: "8xy6"}
+var eightxyeFlag flagStruct = flagStruct{name: "8xye"}
+var fx55Flag flagStruct = flagStruct{name: "fx55"}
+var fx65Flag flagStruct = flagStruct{name: "fx65"}
+
 // ignore the memory clock atm
 func main() {
-	loadFileToMemory(&memory)
+	var overrideFlags []*flagStruct
+	flagSet := make(map[string]bool)
+	fileFlag := flag.String("f", "", "filepath of chip8 program (.ch8 file)")
+	isOriginal.value = flag.Bool(isOriginal.name, false, "set to original cosmacvip behavior (using original behavior if specified)")
+	bnnnFlag.value = flag.Bool(bnnnFlag.name, false, "override bnnn instruction (using original behavior if specified)")
+	eightxy6Flag.value = flag.Bool(eightxy6Flag.name, false, "override 8xy6 instruction (using original behavior if specified)")
+	eightxyeFlag.value = flag.Bool(eightxyeFlag.name, false, "override 8xye instruction (using original behavior if specified)")
+	fx55Flag.value = flag.Bool(fx55Flag.name, false, "override fx55 instruction (using original behavior if specified)")
+	fx65Flag.value = flag.Bool(fx65Flag.name, false, "override fx65 instruction (using original behavior if specified)")
+
+	overrideFlags = append(overrideFlags, &bnnnFlag)
+	overrideFlags = append(overrideFlags, &eightxy6Flag)
+	overrideFlags = append(overrideFlags, &eightxyeFlag)
+	overrideFlags = append(overrideFlags, &fx55Flag)
+	overrideFlags = append(overrideFlags, &fx65Flag)
+
+	flag.Parse()
+	flag.Visit(func(f *flag.Flag) {
+		flagSet[f.Name] = true
+	})
+
+	if len(*fileFlag) < 1 {
+		fmt.Println("Need to specify filepath using -f flag!")
+		return
+	}
+
+	for i := range overrideFlags {
+		f := overrideFlags[i]
+		_, overridden := flagSet[f.name]
+
+		if !overridden {
+			f.value = isOriginal.value
+		}
+	}
+
+	loadFileToMemory(&memory, *fileFlag)
 	go chip()
 	k.SetIsPressed(false)
 	sound.InitSound()
@@ -162,7 +210,9 @@ func chip() {
 					V[0xF] = 0
 				}
 			case 6:
-				// *VX = *VY
+				if *eightxy6Flag.value.(*bool) {
+					*VX = *VY
+				}
 
 				flag := *VX & 0x01
 				*VX >>= 1
@@ -176,7 +226,10 @@ func chip() {
 					V[0xF] = 0
 				}
 			case 0xE:
-				// *VX = *VY
+				if *eightxyeFlag.value.(*bool) {
+					*VX = *VY
+				}
+
 				flag := (*VX >> 7) & 0x01
 				*VX <<= 1
 				V[0xF] = flag
@@ -193,14 +246,14 @@ func chip() {
 		case 0xA:
 			index = instruction & (uint16(0xFFFF) >> 4)
 		case 0xB:
-			// first logic
-			twelveBitAddress := instruction & 0x0FFF
-			PC = twelveBitAddress + uint16(V[0])
-
-			// second logic, might need to adjust on other system
-			// second := ((instruction & uint16(0x0F00)) >> 8)
-			// eightBitAddress := instruction & (uint16(0x00FF))
-			// PC = eightBitAddress + uint16(V[second])
+			if *bnnnFlag.value.(*bool) {
+				twelveBitAddress := instruction & 0x0FFF
+				PC = twelveBitAddress + uint16(V[0])
+			} else {
+				second := ((instruction & uint16(0x0F00)) >> 8)
+				eightBitAddress := instruction & (uint16(0x00FF))
+				PC = eightBitAddress + uint16(V[second])
+			}
 		case 0xC:
 			secondNibble := ((instruction & (uint16(0x0F00))) >> 8)
 			lastByte := byte(instruction & (0x00FF))
@@ -315,12 +368,20 @@ func chip() {
 				for i := byte(0); i <= byte(secondNibble); i++ {
 					memory[ptr] = V[i]
 					ptr++
+
+					if *fx55Flag.value.(*bool) {
+						index++
+					}
 				}
 			case 0x65:
 				ptr := index
 				for i := byte(0); i <= byte(secondNibble); i++ {
 					V[i] = memory[ptr]
 					ptr++
+
+					if *fx65Flag.value.(*bool) {
+						index++
+					}
 				}
 			default:
 				fmt.Printf("unsupported instruction: %X\n", instruction)
@@ -349,13 +410,9 @@ func initFontLocationAddress() {
 	}
 }
 
-func loadFileToMemory(mem *[4096]byte) {
+func loadFileToMemory(mem *[4096]byte, filepath string) {
 	pointer := PROGRAM_START_ADDRESS
-	// dat, err := os.ReadFile("test-roms/chip8-test-rom/6-keypad.ch8")
-	// dat, err := os.ReadFile("test-roms/chip8-test-rom/br8kout.ch8")
-	dat, err := os.ReadFile("test-roms/chip8-test-rom/7-beep.ch8")
-	// dat, err := os.ReadFile("test-roms/chip8-test-rom/chipquarium.ch8")
-	// dat, err := os.ReadFile("test-roms/ibm-logo.ch8")
+	dat, err := os.ReadFile(filepath)
 
 	if err != nil {
 		panic(err)
