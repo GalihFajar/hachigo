@@ -70,8 +70,8 @@ var eightxyeFlag flagStruct = flagStruct{name: "8xye"}
 var fx55Flag flagStruct = flagStruct{name: "fx55"}
 var fx65Flag flagStruct = flagStruct{name: "fx65"}
 var fileFlag *string
+var clockFlag *int
 
-// ignore the memory clock atm
 func main() {
 	flags()
 	loadFileToMemory(&memory, *fileFlag)
@@ -85,6 +85,7 @@ func flags() {
 	var overrideFlags []*flagStruct
 	flagSet := make(map[string]bool)
 	fileFlag = flag.String("f", "", "filepath of chip8 program (.ch8 file)")
+	clockFlag = flag.Int("c", 500, "set clockspeed, in Hz (defaulted to 500 Hz)")
 	isOriginal.value = flag.Bool(isOriginal.name, false, "set to original cosmacvip behavior (using original behavior if specified)")
 	bnnnFlag.value = flag.Bool(bnnnFlag.name, false, "override bnnn instruction (using original behavior if specified)")
 	eightxy6Flag.value = flag.Bool(eightxy6Flag.name, false, "override 8xy6 instruction (using original behavior if specified)")
@@ -99,14 +100,15 @@ func flags() {
 	overrideFlags = append(overrideFlags, &fx65Flag)
 
 	flag.Parse()
-	flag.Visit(func(f *flag.Flag) {
-		flagSet[f.Name] = true
-	})
 
 	if len(*fileFlag) < 1 {
 		fmt.Println("Need to specify filepath using -f flag!")
 		return
 	}
+
+	flag.Visit(func(f *flag.Flag) {
+		flagSet[f.Name] = true
+	})
 
 	for i := range overrideFlags {
 		f := overrideFlags[i]
@@ -394,7 +396,7 @@ func chip() {
 		default:
 			fmt.Printf("unsupported instruction: %X\n", instruction)
 		}
-		time.Sleep(time.Second / 2500)
+		time.Sleep(time.Second / time.Duration(*clockFlag))
 	}
 }
 
