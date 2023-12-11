@@ -345,6 +345,8 @@ func chip() {
 				}
 			case 0x0A:
 				if globalKey.GetIsPressed() {
+					for globalKey.GetIsPressed() {
+					}
 					V[secondNibble] = globalKey.GetMappedKey()
 				} else {
 					PC -= 2
