@@ -9,7 +9,12 @@ To run using non-original behavior:
 $ go run . -f <filepath>
 ```
 
-To view the usage of optional flags:
+To run using original behavior:
+```bash
+$ go run . -f <filepath> -o
+```
+
+To view the usage of other optional flags:
 ```bash
 $ go run . -h
 ```
